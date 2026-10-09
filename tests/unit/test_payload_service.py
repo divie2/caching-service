@@ -1,10 +1,12 @@
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from sqlmodel import Session, SQLModel
 
 from app.db import build_engine
-from app.services.payload import build_output, hash_inputs, transform_with_cache
+from app.models import Payload
+from app.services.payload import build_output, create_payload, hash_inputs, transform_with_cache
 
 
 class CountingTransformer:
@@ -92,3 +94,39 @@ def test_hash_inputs_cannot_be_fooled_by_commas_inside_strings() -> None:
 def test_hash_inputs_changes_when_the_lists_are_swapped() -> None:
     assert hash_inputs(["a"], ["b"]) != hash_inputs(["b"], ["a"])
 
+
+def test_create_payload_stores_a_new_payload(session: Session) -> None:
+    payload, created = create_payload(session, ["a"], ["b"], CountingTransformer())
+
+    assert created is True
+    assert payload.output == "A, B"
+
+
+def test_create_payload_reuses_the_id_for_a_repeated_request(session: Session) -> None:
+    first, _ = create_payload(session, ["a"], ["b"], CountingTransformer())
+    transformer = CountingTransformer()
+
+    second, created = create_payload(session, ["a"], ["b"], transformer)
+
+    assert second.id == first.id
+    assert created is False
+    assert transformer.calls == []
+
+
+def test_create_payload_returns_the_winner_when_it_loses_an_insert_race(tmp_path: Path) -> None:
+    engine = build_engine(f"sqlite:///{tmp_path / 'race.db'}")
+    SQLModel.metadata.create_all(engine)
+    input_hash = hash_inputs(["a"], ["a"])
+
+    def transformer_racing_another_request(value: str) -> str:
+        # While we wait on the slow service, another request saves the same payload.
+        with Session(engine) as other_request:
+            other_request.add(Payload(input_hash=input_hash, output="A, A"))
+            other_request.commit()
+        return value.upper()
+
+    with Session(engine) as session:
+        payload, created = create_payload(session, ["a"], ["a"], transformer_racing_another_request)
+
+    assert created is False
+    assert payload.input_hash == input_hash
