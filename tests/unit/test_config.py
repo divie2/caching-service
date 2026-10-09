@@ -19,3 +19,10 @@ def test_settings_reject_negative_delay(monkeypatch: pytest.MonkeyPatch) -> None
 
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_settings_reject_non_numeric_delay(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TRANSFORMER_DELAY_SECONDS", "abc")
+
+    with pytest.raises(ValidationError):
+        Settings()
