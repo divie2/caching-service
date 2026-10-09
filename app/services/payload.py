@@ -34,3 +34,13 @@ def transform_with_cache(
 
     session.commit()
     return outputs
+
+
+def build_output(
+    session: Session, list_1: list[str], list_2: list[str], transformer: Transformer
+) -> str:
+    """Transform both lists through the cache and join the results in interleaved order."""
+    outputs = transform_with_cache(session, list_1 + list_2, transformer)
+    transformed_1 = [outputs[value] for value in list_1]
+    transformed_2 = [outputs[value] for value in list_2]
+    return ", ".join(interleave(transformed_1, transformed_2))

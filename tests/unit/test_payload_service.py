@@ -4,7 +4,7 @@ import pytest
 from sqlmodel import Session, SQLModel
 
 from app.db import build_engine
-from app.services.payload import transform_with_cache
+from app.services.payload import build_output, transform_with_cache
 
 
 class CountingTransformer:
@@ -53,3 +53,25 @@ def test_only_uncached_values_are_transformed(session: Session) -> None:
 
     assert outputs == {"b": "B", "c": "C"}
     assert transformer.calls == ["c"]
+
+
+def test_build_output_matches_the_example_from_the_brief(session: Session) -> None:
+    output = build_output(
+        session,
+        ["first string", "second string", "third string"],
+        ["other string", "another string", "last string"],
+        CountingTransformer(),
+    )
+
+    assert output == (
+        "FIRST STRING, OTHER STRING, SECOND STRING, ANOTHER STRING, THIRD STRING, LAST STRING"
+    )
+
+
+def test_build_output_transforms_values_shared_by_both_lists_once(session: Session) -> None:
+    transformer = CountingTransformer()
+
+    output = build_output(session, ["a", "b"], ["b", "a"], transformer)
+
+    assert output == "A, B, B, A"
+    assert transformer.calls == ["a", "b"]
