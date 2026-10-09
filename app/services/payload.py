@@ -26,6 +26,15 @@ def interleave(first: list[str], second: list[str]) -> list[str]:
     return result
 
 
+def _save_to_cache(session: Session, value: str, output: str) -> None:
+    """Cache one result; if another request cached it first, its output is identical."""
+    session.add(TransformCache(input=value, output=output))
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+
+
 def transform_with_cache(
     session: Session, values: list[str], transformer: Transformer
 ) -> dict[str, str]:
@@ -40,10 +49,9 @@ def transform_with_cache(
     misses = [value for value in distinct if value not in outputs]
     for value in misses:
         output = transformer(value)
-        session.add(TransformCache(input=value, output=output))
+        _save_to_cache(session, value, output)
         outputs[value] = output
 
-    session.commit()
     return outputs
 
 

@@ -2,10 +2,10 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from sqlmodel import Session, SQLModel
+from sqlmodel import Session, SQLModel, select
 
 from app.db import build_engine
-from app.models import Payload
+from app.models import Payload, TransformCache
 from app.services.payload import build_output, create_payload, hash_inputs, transform_with_cache
 
 
@@ -130,3 +130,24 @@ def test_create_payload_returns_the_winner_when_it_loses_an_insert_race(tmp_path
 
     assert created is False
     assert payload.input_hash == input_hash
+
+
+def test_transform_with_cache_survives_another_request_caching_the_same_value(
+    tmp_path: Path,
+) -> None:
+    engine = build_engine(f"sqlite:///{tmp_path / 'race.db'}")
+    SQLModel.metadata.create_all(engine)
+
+    def transformer_racing_another_request(value: str) -> str:
+        # While we wait on the slow service, another request caches the same value.
+        with Session(engine) as other_request:
+            other_request.add(TransformCache(input=value, output=value.upper()))
+            other_request.commit()
+        return value.upper()
+
+    with Session(engine) as session:
+        outputs = transform_with_cache(session, ["a", "b"], transformer_racing_another_request)
+        cached_inputs = [row.input for row in session.exec(select(TransformCache)).all()]
+
+    assert outputs == {"a": "A", "b": "B"}
+    assert sorted(cached_inputs) == ["a", "b"]
