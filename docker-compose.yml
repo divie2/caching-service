@@ -1,0 +1,14 @@
+# Runs the API with SQLite stored in a named volume.
+# For Postgres, add the override file: docker compose -f docker-compose.yml -f docker-compose.postgres.yml up
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      TRANSFORMER_DELAY_SECONDS: ${TRANSFORMER_DELAY_SECONDS:-1}
+    volumes:
+      - api-data:/data
+
+volumes:
+  api-data:
