@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlmodel import SQLModel
 
+from app.api.routes import router
 from app.config import Settings
 from app.db import build_engine
 from app.transformer import make_transformer
@@ -25,7 +26,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         engine.dispose()
 
-    return FastAPI(title="Caching service", lifespan=lifespan)
+    app = FastAPI(title="Caching service", lifespan=lifespan)
+    app.include_router(router)
+    return app
 
 
 app = create_app()
