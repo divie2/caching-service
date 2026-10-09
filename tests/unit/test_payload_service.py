@@ -45,11 +45,11 @@ def test_cached_values_are_not_transformed_again(session: Session) -> None:
     assert transformer.calls == []
 
 
-def test_cache_values_are_not_transformed_again(session: Session) -> None:
+def test_only_uncached_values_are_transformed(session: Session) -> None:
     transform_with_cache(session, ["a", "b"], CountingTransformer())
     transformer = CountingTransformer()
 
-    outputs = transform_with_cache(session, ["a", "b", "c"], transformer)
+    outputs = transform_with_cache(session, ["b", "c", "c"], transformer)
 
-    assert outputs == {"a": "A", "b": "B", "c": "C"}
+    assert outputs == {"b": "B", "c": "C"}
     assert transformer.calls == ["c"]
