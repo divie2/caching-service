@@ -1,9 +1,19 @@
 """Builds payload outputs while calling the expensive transformer as little as possible."""
 
+import hashlib
+import json
+
 from sqlmodel import Session, col, select
 
 from app.models import TransformCache
 from app.transformer import Transformer
+
+
+def hash_inputs(list_1: list[str], list_2: list[str]) -> str:
+    """Fingerprint a request so an identical request can reuse the same payload."""
+    # JSON quotes every string, so different lists can never produce the same text.
+    canonical = json.dumps([list_1, list_2])
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def interleave(first: list[str], second: list[str]) -> list[str]:

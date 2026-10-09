@@ -4,7 +4,7 @@ import pytest
 from sqlmodel import Session, SQLModel
 
 from app.db import build_engine
-from app.services.payload import build_output, transform_with_cache
+from app.services.payload import build_output, hash_inputs, transform_with_cache
 
 
 class CountingTransformer:
@@ -75,3 +75,20 @@ def test_build_output_transforms_values_shared_by_both_lists_once(session: Sessi
 
     assert output == "A, B, B, A"
     assert transformer.calls == ["a", "b"]
+
+
+def test_hash_inputs_is_the_same_for_identical_requests() -> None:
+    first = hash_inputs(["a", "b"], ["c", "d"])
+    second = hash_inputs(["a", "b"], ["c", "d"])
+
+    assert first == second
+    assert len(first) == 64
+
+
+def test_hash_inputs_cannot_be_fooled_by_commas_inside_strings() -> None:
+    assert hash_inputs(["a, b"], ["c"]) != hash_inputs(["a"], ["b, c"])
+
+
+def test_hash_inputs_changes_when_the_lists_are_swapped() -> None:
+    assert hash_inputs(["a"], ["b"]) != hash_inputs(["b"], ["a"])
+
