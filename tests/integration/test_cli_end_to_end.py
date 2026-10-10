@@ -1,10 +1,12 @@
 import json
 from pathlib import Path
+from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from cli.main import main, parse_options, send, write_results
+from cli.main import REQUEST_TIMEOUT_SECONDS, main, parse_options, send, write_results
 from tests.fakes import CountingTransformer
 
 
@@ -37,3 +39,29 @@ def test_main_reports_invalid_arguments_with_exit_code_2(
 
     assert exit_code == 2
     assert "invalid arguments" in capsys.readouterr().err
+
+
+def test_main_waits_longer_than_the_httpx_default_for_slow_transforms(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def fake_server(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(201, json={"id": "abc"})
+        return httpx.Response(200, json={"output": "A, B"})
+
+    created_clients: list[httpx.Client] = []
+    real_client = httpx.Client
+
+    def client_with_fake_server(**kwargs: Any) -> httpx.Client:
+        client = real_client(transport=httpx.MockTransport(fake_server), **kwargs)
+        created_clients.append(client)
+        return client
+
+    monkeypatch.setattr(httpx, "Client", client_with_fake_server)
+    output_file = tmp_path / "results.jsonl"
+
+    exit_code = main(["-j", '{"list_1": ["a"], "list_2": ["b"]}', "-o", str(output_file)])
+
+    assert exit_code == 0
+    assert created_clients[0].timeout.read == REQUEST_TIMEOUT_SECONDS
+    assert json.loads(output_file.read_text(encoding="utf-8"))["output"] == "A, B"

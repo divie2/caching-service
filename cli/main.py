@@ -14,6 +14,9 @@ from pydantic_settings import BaseSettings, CliApp, CliSettingsSource, SettingsC
 from app.schemas import PayloadCreate
 
 STDIO = "-"
+# A new payload waits on the slow transformer once per uncached string, which can easily
+# exceed httpx's 5-second default; giving up early would hide a request that still succeeds.
+REQUEST_TIMEOUT_SECONDS = 120.0
 
 
 class CliOptions(BaseSettings):
@@ -108,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"cache-cli: invalid arguments\n{error}", file=sys.stderr)
         return 2
     try:
-        with httpx.Client(base_url=str(options.host)) as client:
+        with httpx.Client(base_url=str(options.host), timeout=REQUEST_TIMEOUT_SECONDS) as client:
             results = send(options, client)
     except httpx.HTTPError as error:
         print(f"cache-cli: request failed: {error}", file=sys.stderr)
